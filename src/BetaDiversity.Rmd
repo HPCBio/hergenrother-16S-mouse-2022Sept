@@ -64,46 +64,14 @@ physeq.prop <- transform_sample_counts(physeq.prev, function(x) x/sum(x) )
 sample_data(physeq.prop)$SampleSums <- sample_sums(physeq.prev)
 ```
 
-<!-- ## CLR normalization, McMurdie -->
 
-<!-- Transform data using CLR (from McMurdie (Meth Mol Bio 2018) supplemental package).   -->
-
-```{r }
-# # copy instance and replace raw counts with CLR-normalized counts
-# physeq.clr <- phyloseq_CLR(physeq.prev)
-# # otu_table(physeq.clr) <- otu_table(as(x, "matrix"), taxa_are_rows = FALSE)
-# physeq.clr
-# 
-# mucosa.clr <- phyloseq_CLR(mucosa.prev)
-# digesta.clr <- phyloseq_CLR(digesta.prev)
-```
-
-<!-- ## CLR normalization, mixOmics -->
-
-<!-- CLR from `mixOmics`. -->
-
-```{r }
-# # get counts
-# tmp <- as(otu_table(mucosa.prev),"matrix")
-# 
-# tmp <- tmp
-# 
-# # transpose if needed
-# if(!taxa_are_rows(mucosa.prev)) { tmp <- t(tmp)}
-# 
-# x <- logratio.transfo(tmp, logratio = 'CLR', offset = 1)
-# 
-# # copy instance and replace raw counts with CLR-normalized counts
-# mucosa.clr2 <- mucosa.prev
-# otu_table(mucosa.clr2) <- otu_table(as(x, "matrix"), taxa_are_rows = TRUE)
-# mucosa.clr2
-```
-
-Set the active normalization type (proportion for now)
+Set the active normalization type
 
 ```{r}
 physeq.active <- physeq.prop
 ```
+
+
 
 ### Bray Curtis metric
 
@@ -118,8 +86,6 @@ p1 = plot_ordination(physeq.active,
                      shape = "Day",
                      title="Samples") + geom_point(size = 2.5)
 p1 + ggtitle("PCoA, Bray Curtis distance")
-#ggplotly(p1 + ggtitle("PCoA, Bray Curtis distance"))
-#+  scale_fill_viridis_d()
 ```
 
 Again splitting by some of those Amoxicillin and Clindamycin samples on day 7 and 10. Lolamycin and Vehicle tend to plot closely together so they do seem to share more diversity.
@@ -139,8 +105,7 @@ p1 = plot_ordination(physeq.test,
                      shape = "Day",
                      title="Samples") + geom_point(size = 2.5)
 p1 + ggtitle("PCoA, Bray Curtis distance")
-#ggplotly(p1 + ggtitle("PCoA, Bray Curtis distance"))
-#+  scale_fill_viridis_d()
+
 ```
 
 Check to see if number of sequences per sample (input) affects diversity
@@ -171,7 +136,6 @@ p1 = plot_ordination(physeq.active,
                      shape = "Day",
                      label = "Label",
                      title="Samples") + geom_point(size = 2.5)
-#p1 + scale_color_brewer(palette="Spectral")
 ggplotly(p1)
 ```
 
@@ -209,7 +173,7 @@ adonis2(finalPhyseq.prop.dist.bc ~ Treatment_Day,
        data = finalPhyseq.meta)
 ```
 
-Treatment, Day, and the interaction of Treatment*Day are all very significant, and combined explain ~70% of the variance. However, as it turns out the data are heteroscedastic (see below), which may invalidate these results. See test below.
+Treatment, Day, and the interaction of Treatment*Day are all very significant, and combined explain ~70% of the variance.
 
 
 Test for differences between group dispersion. Ideally, these tests won't be significant.
@@ -236,43 +200,5 @@ beta <- betadisper(finalPhyseq.prop.dist.bc, finalPhyseq.meta$Treatment_Day)
 permutest(beta)
 ```
 
-These are all significant, which means the data are heteroscedastic with Treatment X Day being closest to not being heterscedastic (i.e. highest p value). PERMANOVA tests are sensitive to unbalanced/heterscedastic data (though it is the most robust of all the possible tests) which can bring to question the validity of these results. On the positive side, the significance is very strong and the heatmap suggests that this is a real biological effect. This is also not uncommon in time-series data sets where there are drastic changes over time. However there is one more thing to consider...
+These are all significant, which means the data are heteroscedastic with Treatment X Day being closest to not being heterscedastic (i.e. highest p value). PERMANOVA tests are sensitive to unbalanced/heterscedastic data (though it is the most robust of all the possible tests). On the positive side, the significance is very strong and the heatmap suggests that this is a real biological effect. This is also not uncommon in time-series data sets where there are drastic changes over time.
 
-### Confounding variable
-
-Out of curiosity I also tested the forward and reverse Pacbio primers (the indices used for multiplexing) for significance and found that the reverse primers indices used for multiplexing were very significant, which is unusual. Based on the metadata, it looks like the reverse primers are confounded with the treatments. There are 3 primers per antibiotic. This means that they are not evenly spread out across treatments. It's not likely that these have affected your project results, but we can't completely rule it out either.
-
-Reverse_Primer test:
-
-```{r}
-set.seed(12345)
-adonis2(finalPhyseq.prop.dist.bc ~ Reverse_Primer,
-       data = finalPhyseq.meta)
-```
-
-Treatment x Day X Reverse Primer
-```{r}
-set.seed(12345)
-adonis2(finalPhyseq.prop.dist.bc ~ Trt_Day_RevP,
-       data = finalPhyseq.meta)
-```
-Treatment x Day x Reverse Primer is very significant, however, the R2 values is only a couple of percentage points higher than the Treatment x Day tests, which means that Reverse_Primer isn't affecting much, if anything.
-
-
-Reverse Primer tests for heteroscedasticity
-
-Reverse_Primer:
-```{r}
-beta <- betadisper(finalPhyseq.prop.dist.bc, finalPhyseq.meta$Reverse_Primer)
-permutest(beta)
-```
-
-Reverse Primer is not heteroscedastic
-
-Treat_Day_RevP:
-```{r}
-beta <- betadisper(finalPhyseq.prop.dist.bc, finalPhyseq.meta$Trt_Day_RevP)
-permutest(beta)
-```
-
-Treatment x Day x RevP is NOT heteroscedastic, but it's close.

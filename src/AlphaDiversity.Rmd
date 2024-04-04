@@ -162,4 +162,4 @@ plots <- lapply(c('Chao1', 'Shannon', 'Simpson', 'InvSimpson', 'Observed', 'PD')
          })
 ```
 
-Only the InvSimpson metric passes the normality test, so we should use the Wilcoxen rank sum test above.
+Only the InvSimpson metric passes the normality test, so we should use the non-parametric. Wilcoxen rank sum test above.

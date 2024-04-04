@@ -173,8 +173,6 @@ The log scale doesn't make the cutoff any clearer, so lets explore more.
 
 ```{r PrevalenceFiltering-17}
 # Use the cutoffs listed above
-
-# this takes some time to run :).  There is a speedyseq package with a faster tip_glom implementation, might be worth checking
 pseqs <- lapply(cutoff[1:7], function(x) {tip_glom(physeq.filtered, h = x)})
 
 names(pseqs) <- cutoff[1:7]
@@ -213,68 +211,6 @@ physeq.glom <- tip_glom(physeq.filtered, h = 0.175)
 physeq.glom
 ```
 
-### Tax agglomeration
-
-What is the effect of taxonomic agglomeration per rank? Let's do a quick run through on the samples; ranks that are not assigned are removed by default, so let's see what happens.
-
-```{r PrevalenceFiltering-23 }
-taxglom_per_rank = function(physeq.glom, rank = "Species") {
-  # TODO: add sanity check
-  glommedPhyseq <- tax_glom(physeq.glom, taxrank = rank, NArm = TRUE)
-  p <- ggplot(data = data.frame(
-      SampleLoss = sample_sums(glommedPhyseq) / sample_sums(physeq.filtered),
-      Names = factor(sample_data(glommedPhyseq)$Label,
-                     ordered = TRUE,
-                     levels = sample_data(glommedPhyseq)$Label),
-      Group = factor(sample_data(glommedPhyseq)$Treatment, ordered = TRUE)
-  ), aes(y = SampleLoss, x = Names, fill = Group)) +
-    geom_bar(stat = 'identity' ) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-    ggtitle(paste0("Rank: ", rank))
-  return(p)
-}
-```
-
-```{r PrevalenceFiltering-24 }
-tmp <- as(tax_table(physeq.filtered), 'matrix')
-tmp[tmp == 'Unclassified'] = NA
-tax_table(physeq.filtered) <- tmp
-```
-
-```{r}
-ranks <- c("Species", "Genus", "Family", "Order")
-
-plots <- lapply(ranks, function(x) {
-  p <- taxglom_per_rank(physeq.filtered, rank = x)
-  p + theme(legend.position = "none") + expand_limits(y = c(0, 1))
-})
-
-grid.arrange(grobs = plots)
-```
-
-Quite a bit lost with species and genus, not atypical for short fragments unfortunately.  Are there rows in there with 'NA'?
-
-```{r PrevalenceFiltering-25 }
-#apply(tax_table(physeq.glom), 2, function(x) sum(x != "Unclassified"))
-apply(tax_table(physeq.filtered), 2, function(x) sum(is.na(x)))
-```
-
-A steep increase in unassigned ranks from Order to Genus. If we stick to family we retain most information.  If we choose taxonomic agglomeration, I'll likely agglomerate to Order or Family simply due to the resolution, but we can revisit.
-
-<!-- Yes, though not nearly as many as the overall # of taxa. This suggests maybe using the phylogenetic tree and `tip_glom`. We have been seeing this work with better fidelity with more recent data sets, particularly from PacBio sequences, but it does require a little checking on the phylogenetic branch lengths to determine the best cutoff.  The code below is based on work Lindsay Clark and Jenny have done in the group.  -->
-
-<!-- ## Tree glom  -->
-
-<!-- This is a newer but somewhat experimental method implemented in the `speedyseq` package. -->
-
-<!-- ```{r} -->
-<!-- #get_pairwise_distances(tree, A, B, as_edge_counts=FALSE, check_input=TRUE) -->
-<!-- ``` -->
-
-```{r}
-# physeq.glom <- tax_glom(physeq.filtered, taxrank = 'Family', NArm = FALSE)
-# physeq.glom
-```
 
 ## Features and Prevalence tables
 
@@ -293,12 +229,6 @@ table(tax_table(physeq0)[,"Phylum"], exclude = NULL)
 
 None of the of ASVs at the Phylum level are 'NA' so that's great. There are number with low features (1-3 OTUs) as well. 
 
-
-<!--  #Skipping the removal of NA phyla -->
-<!--  ```{r PrevalenceFiltering-28 } -->
-<!--  physeq0 <- subset_taxa(physeq0, !is.na(Phylum) & !Phylum %in% c("", "uncharacterized")) -->
-<!--  physeq0 -->
-<!--  ``` -->
 
 
 Now, let's get an idea how many taxa in the samples have an ASV count greater than 1.  We can make this more or less strict as needed.
@@ -371,7 +301,7 @@ p <- p + theme(axis.text.x = element_text(angle = 90, hjust = 1))
 p
 ```
 
-This retains the vast majority of data (~99% or so), so this seems like a reasonable cutoff. I could even increase the prevalence threshold to 0.1  (present in 10 samples) and that still retains the majority of counts except for one Clindamyacin sample. I'll stick with 0.05, but we can increase this later if you'd like.
+This retains the vast majority of data (~99% or so), so this seems like a reasonable cutoff. I could even increase the prevalence threshold to 0.1  (present in 10 samples) and that still retains the majority of counts except for one Clindamyacin sample. I'll stick with 0.05.
 
 ```{r PrevalenceFiltering-35 }
 saveRDS(physeq.prev, file = "results/phyloseq.prevfiltered.RDS")

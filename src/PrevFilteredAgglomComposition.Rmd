@@ -4,7 +4,7 @@ source("~/Desktop/hpcbio-git/hergenrother-16S-mouse-2022Sept/src/common_code.R",
 ```
 
 ```{r}
-physeq.prev <- readRDS('results/phyloseq.prevfiltered.RDS')
+physeq.prev <- readRDS('./results/phyloseq.prevfiltered.RDS')
 ```
 
 
@@ -17,13 +17,12 @@ Let's look at the taxonomic composition now that the data is filtered.
 physeq.prev.prop <- transform_sample_counts(physeq.prev, function(x) x/sum(x) )
 sample_data(physeq.prev.prop)$SampleSums <- sample_sums(physeq.prev)
 
-#Pull out top 20 families
-physeq.subset <- tax_glom(physeq.prev.prop, taxrank = "Family")
-tax.ordered <- names(sort(taxa_sums(physeq.subset), TRUE)[1:20])
+#Order data
+tax.ordered <- names(sort(taxa_sums(physeq.prev.prop), TRUE))
 physeq.plot <- subset_taxa(physeq.prev.prop, taxa_names(physeq.prev.prop) %in% tax.ordered)
 ```
 
-Overall compositional summary (stacked bar plots) for all prevalence filtered and tip agglomerated samples.  In this example here are the top 20 families by composition per sample, split by treatment.  Note again that most can be classified to the family or order rank, but genus and species ranks see few reliable assignments.
+Overall compositional summary (stacked bar plots) for all prevalence filtered and tip agglomerated samples.  In this example here are all the families by composition per sample, split by treatment.  Note again that most can be classified to the family or order rank, but genus and species ranks see few reliable assignments.
 
 ```{r, results='asis', fig.keep='all', message = FALSE, warning = FALSE, echo = FALSE}
 kc <- c("SampleID","Label","Treatment","Day","Replicate")
@@ -39,17 +38,14 @@ plots <- lapply(ranks, function (x) {
         axis.text.x = element_text(size = 5),
         axis.ticks.x = element_blank()) +
         ylab("Relative Abundance") +
-        facet_wrap(~Treatment, scales = "free_x")
-       # guides(fill = guide_legend(nrow = 30))
+        facet_wrap(~Treatment, scales = "free_x") +
+        guides(fill = guide_legend(nrow = 35))
   
-#p <- composition_df(physeq, x, minprop = 0.05, keepcols = kc)
-#p + facet_wrap(~Location, scales = "free_x", nrow = 1)
-  #ggplot(p, aes(x = Label, y = Proportion, fill = print(x, quote=FALSE))) + geom_col() + 
-  #  facet_wrap(~Treatment, scales = "free_x") + 
-  #  scale_fill_manual(values = dittoSeq::dittoColors(1)) +
-  #  theme(axis.text.x = element_text(size = 8, angle = 45, hjust = 1, vjust = 0.5))
- ggplotly(p1)
- # p1
+p1
+f <- paste("../results/taxa-new/RA_abundance_", x, ".pdf", sep="")
+ggsave(f, device = "pdf", width = 6, height = 4, units = "in")
+
+ggplotly(p1)
 })
 
 names(plots) <- ranks

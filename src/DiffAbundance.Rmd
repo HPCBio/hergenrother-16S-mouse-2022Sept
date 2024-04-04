@@ -113,6 +113,7 @@ plotDESeq2ResSpecies <- function(res) {
 
 Pull out specific contrast. The numbers in the contrast vector below correspond to the different test results we generated:
 
+
 ## Example Test: Vehicle Day 7 vs Lolamycin Day 7
 
 This is just an example of the types of plots I can make with differential abundance testing. Let me know if you would like me to pull out other or all comparisons. I will save them to pdfs rather than putting them in this report.

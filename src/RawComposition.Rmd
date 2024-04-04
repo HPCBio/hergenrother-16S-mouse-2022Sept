@@ -39,12 +39,6 @@ plots <- lapply(ranks, function (x) {
         ylab("Relative Abundance") +
         facet_wrap(~Treatment, scales = "free_x")
   
-#p <- composition_df(physeq, x, minprop = 0.05, keepcols = kc)
-#p + facet_wrap(~Location, scales = "free_x", nrow = 1)
-  #ggplot(p, aes(x = Label, y = Proportion, fill = print(x, quote=FALSE))) + geom_col() + 
-  #  facet_wrap(~Treatment, scales = "free_x") + 
-  #  scale_fill_manual(values = dittoSeq::dittoColors(1)) +
-  #  theme(axis.text.x = element_text(size = 8, angle = 45, hjust = 1, vjust = 0.5))
  ggplotly(p1)
 })
 

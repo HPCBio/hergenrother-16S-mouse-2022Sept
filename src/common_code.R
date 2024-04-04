@@ -1,11 +1,9 @@
-# Common code 
-# This should be moved into the HPCBio microbiome folder
+# COMMON CODE
 
-#To install bookdown:
-## install.packages("bookdown")
-## nstall.packages('servr')
 
-# Note that not all libraries will be needed.  Most phyloseq code uses ggplot and tidyverse internally, therefore we explicitly load here
+## LIBRARIES
+
+# Not all libraries may be needed.
 library(tidyverse)
 library(phyloseq) #BioC
 library(plotly)
@@ -13,63 +11,28 @@ library(scales)
 library(knitr)
 library(gridExtra)
 
-# this seems to have issues with caching and phyloseq
-# library(ggtree) 
-
-# For normalization
-# library(metagenomeSeq)
-
 # phylogenetic tree input
 library(ape)
-
-# read/modify BIOM 
-# library(biomformat)
-
-# ggplot functions for trees and dendrograms
-# library(ggdendro)
 
 # distance measures, PERMANOVA, ANOSIM
 library(vegan)
 
-# generation of stats values for graphs
+# gg stats & editing
 library(ggpubr)
+library(gginnards)
 
 # normalization (CLR)
-library(mixOmics) #BioC
+library(mixOmics)
 
 # to get labels2color
 library(WGCNA)
 
-#Loading WGCNA library for first time also requires:
-##BiocManager::install("GO.db")
-##BiocManager::install("impute")
-##BiocManager::install("preprocessCore")
-
-
-# mixed models (needs to be updated)
-# library(lme4)
-# library(lmerTest)
-# library(nlme)
-# to get post-hoc tests for mixed-model tests 
-# library(lsmeans)
-
-# sample decontamination 
-# library(decontam)
-
-# library(devtools)
-
-# needed in case we want to use ANCOM
-#library(exactRankTests)
-
-#Other libraries I added later
-##library(BiocManager)
-##BiocManager::install("microbiome")
-##library(devtools)
-##devtools::install_github("gauravsk/ranacapa")
-##devtools::install_github("hpcbio/plotly_microbiome")
-# library(plotly.microbiome)
-# library(microbiome)
+# visualization
 library(ranacapa)
+
+
+
+## FUNCTIONS
 
 # this is to load some extension helper code, see: https://github.com/HPCBio/phyloseq-extended
 devtools::load_all('~/src/phyloseq-extended/')
@@ -283,5 +246,6 @@ plot_richness_estimates = function(physeq,
   return(p)
 }
 
+## OPTIONS
 options(stringsAsFactors = FALSE)
 theme_set(theme_bw())
