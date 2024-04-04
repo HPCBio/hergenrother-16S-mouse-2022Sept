@@ -1,0 +1,59 @@
+# Alpha rarefaction
+
+```{r, include=FALSE}
+# at some point this should be moved into bookdown
+source("~/Desktop/hpcbio-git/hergenrother-16S-mouse-2022Sept/src/common_code.R", local = knitr::knit_global())
+```
+
+```{r}
+physeq.filtered <- readRDS('results/physeq.filtered.RDS')
+```
+
+Let's check whether we're adequately capturing diversity.  This is a simple alpha rarefaction curve; here we want to see the number of taxa plateau as the counts increase.
+
+```{r, include=FALSE}
+p <- suppressMessages(ranacapa::ggrare(physeq.filtered, step = 1000,
+            color = "Treatment",
+           # label = "Label",
+            se = FALSE,
+            plot = FALSE,
+            )) + ggtitle("Alpha Rarefaction")
+```
+
+```{r}
+ggsave("alpha-rarefaction-colorByTreatment.pdf", path = "./results/final-plots", device = "pdf")
+ggplotly()
+```
+
+
+We can also split this by Treatment:
+
+```{r}
+p <- p + facet_wrap(~Treatment) + ggtitle("Alpha Rarefaction by Treatment")  # theme(legend.position = c(0.8, 0.2))
+
+ggplotly(p)
+ggsave("alpha-rarefaction-splitByTreatment.pdf", path = "./results/final-plots", device = "pdf")
+```
+
+Rarefaction looks pretty decent. There may be a few samples that didn't plateau (not all diversity seems to have been captured)
+
+
+And also by Day:
+
+```{r}
+p <- p + facet_wrap(~Day) + ggtitle("Alpha Rarefaction by Day")  # theme(legend.position = c(0.8, 0.2))
+
+ggplotly(p)
+ggsave("alpha-rarefaction-splitByDay.pdf", path = "./results/final-plots", device = "pdf")
+```
+
+
+
+```{r}
+# I tried a new function so that I could group the rarefaction plot by a treatment group, but it is very slow, the legend values were transformed to 1,2,3,4 instead of 0,7,10,30, and variation was not plotted. So won't use this one.
+#library(mobr)
+#df <- data.matrix(otu_table(physeq.filtered))
+#sd <- data.matrix(sample_data(physeq.filtered))
+#mob.t <- make_mob_in(df,sd)
+#p <- plot_rarefaction(mob.t, ref_level=1,group_var="Day",method="IBR")
+```

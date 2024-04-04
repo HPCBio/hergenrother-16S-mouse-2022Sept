@@ -1,0 +1,313 @@
+```{r, include=FALSE}
+source("~/Desktop/hpcbio-git/hergenrother-16S-mouse-2022Sept/src/common_code.R", local = knitr::knit_global())
+```
+
+```{r}
+physeq.prev <- readRDS('results/phyloseq.prevfiltered.RDS')
+```
+
+# Differential abundance analysis
+
+Run DESeq2.
+
+```{r }
+library(DESeq2)
+sd <- sample_data(physeq.prev)
+
+sd$Group <- sd$Treatment_Day
+sample_data(physeq.prev) <- sd
+
+design <- model.matrix(~ 0 + Group, data = as(sd, "data.frame"))
+
+finalPhyseq.adds = phyloseq_to_deseq2(physeq.prev, ~ 0 + Group)
+
+finalPhyseq.adds = DESeq(finalPhyseq.adds,
+                         test="Wald",
+                         fitType="local",
+                         sfType = "poscounts",
+                         quiet = TRUE
+                         )
+```
+
+What are the results names?
+
+```{r}
+resultsNames(finalPhyseq.adds)
+```
+
+```{r }
+generateContrastResults <- function(deseq, contrast, physeq, file = "results.txt") {
+  res = results(deseq, 
+              cooksCutoff = FALSE, 
+              contrast = contrast,
+              test = "Wald"
+              )
+  res = cbind(as(res, "data.frame"), as(tax_table(physeq)[rownames(res), ], "matrix"))
+  
+  write.table(res, file, row.names = TRUE, col.names = NA, sep = "\t")
+  return(res)
+}
+
+plotDESeq2ResGenus <- function(res) {
+  sigtab <- res[which(res$padj < 0.05), ]
+  scale_fill_discrete <- function(palname = "Set1", ...) {
+      scale_fill_brewer(palette = palname, ...)
+  }
+  
+  x = tapply(sigtab$log2FoldChange, sigtab$Phylum, function(x) max(x))
+  x = sort(x, TRUE)
+  sigtab$Phylum = factor(as.character(sigtab$Phylum), levels=names(x))
+  
+  # Genus order
+  x = tapply(sigtab$log2FoldChange, sigtab$Genus, function(x) max(x))
+  x = sort(x, TRUE)
+  sigtab$Genus = factor(as.character(sigtab$Genus), levels=names(x))
+  p <- ggplot(sigtab, aes(x=Genus, y=log2FoldChange, color=Phylum)) + geom_point(size=6) +
+    theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust=0.5, face = 'italic'),
+          legend.text = element_text(face = 'italic'))
+  return(p)
+}
+
+plotDESeq2ResFamily <- function(res) {
+  sigtab <- res[which(res$padj < 0.05), ]
+  scale_fill_discrete <- function(palname = "Set1", ...) {
+      scale_fill_brewer(palette = palname, ...)
+  }
+  
+  x = tapply(sigtab$log2FoldChange, sigtab$Phylum, function(x) max(x))
+  x = sort(x, TRUE)
+  sigtab$Phylum = factor(as.character(sigtab$Phylum), levels=names(x))
+  
+  # Family order
+  x = tapply(sigtab$log2FoldChange, sigtab$Family, function(x) max(x))
+  x = sort(x, TRUE)
+  sigtab$Family = factor(as.character(sigtab$Family), levels=names(x))
+  p <- ggplot(sigtab, aes(x=Family, y=log2FoldChange, color=Phylum)) + geom_point(size=6) +
+    theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust=0.5, face = 'italic'),
+          legend.text = element_text(face = 'italic'))
+  return(p)
+}
+
+plotDESeq2ResSpecies <- function(res) {
+  sigtab <- res[which(res$padj < 0.05), ]
+  scale_fill_discrete <- function(palname = "Set1", ...) {
+      scale_fill_brewer(palette = palname, ...)
+  }
+  
+  x = tapply(sigtab$log2FoldChange, sigtab$Phylum, function(x) max(x))
+  x = sort(x, TRUE)
+  sigtab$Phylum = factor(as.character(sigtab$Phylum), levels=names(x))
+  
+  # Genus + Species order
+  sigtab$GeneSpecies <- paste(sigtab$Genus,sigtab$Species)
+  x = tapply(sigtab$log2FoldChange, sigtab$GeneSpecies, function(x) max(x))
+  x = sort(x, TRUE)
+  sigtab$GeneSpecies = factor(as.character(sigtab$GeneSpecies), levels=names(x))
+  p <- ggplot(sigtab, aes(x=GeneSpecies, y=log2FoldChange, color=Phylum)) + geom_point(size=6) +
+    theme(axis.text.x = element_text(angle = -45, hjust = 0, vjust=0.5, face = 'italic'),
+          legend.text = element_text(face = 'italic'))
+  return(p)
+}
+
+```
+
+Pull out specific contrast. The numbers in the contrast vector below correspond to the different test results we generated:
+
+## Example Test: Vehicle Day 7 vs Lolamycin Day 7
+
+This is just an example of the types of plots I can make with differential abundance testing. Let me know if you would like me to pull out other or all comparisons. I will save them to pdfs rather than putting them in this report.
+
+How many taxa are significant?
+
+```{r }
+res.test = generateContrastResults(deseq = finalPhyseq.adds,
+                              contrast = c("Group", "Vehicle_7", "Lolamycin_7"),
+                              physeq = physeq.prev,
+                              file = "results/DESeq2/Overall-Vehicle_7-vs-Lolamycin_7.txt"
+)
+dim(res.test[which(res.test$padj <= 0.05), ])
+```
+
+There are 3 significant taxa.
+
+
+Plot at Family-level
+```{r }
+plotDESeq2ResFamily(res.test)
+ggsave("Diff-Abund_Family_Vehicle_7-vs-Lolamycin_7", path = "results/DESeq2/", device = "pdf")
+```
+
+Plot at Genus-level
+```{r }
+plotDESeq2ResGenus(res.test)
+ggsave("Diff-Abund_Genus_Vehicle_7-vs-Lolamycin_7", path = "results/DESeq2/", device = "pdf")
+```
+
+Plot at Species-level
+```{r }
+plotDESeq2ResSpecies(res.test)
+ggsave("Diff-Abund_Species_Vehicle_7-vs-Lolamycin_7", path = "results/DESeq2/", device = "pdf")
+```
+
+## Create all Diff Abund plots & save to PDF
+
+```{r }
+library(DESeq2)
+sd <- sample_data(physeq.prev)
+
+sd$Group <- sd$Treatment_Day
+sample_data(physeq.prev) <- sd
+
+design <- model.matrix(~ 0 + Group, data = as(sd, "data.frame"))
+
+finalPhyseq.adds = phyloseq_to_deseq2(physeq.prev, ~ Group)
+
+finalPhyseq.adds = DESeq(finalPhyseq.adds,
+                         test="Wald",
+                         fitType="local",
+                         sfType = "poscounts",
+                         quiet = TRUE
+                         )
+```
+
+What are the results names?
+
+```{r}
+resultsNames(finalPhyseq.adds)
+```
+
+Run a loop that will save these tables and images for all the different pairwise contrasts.
+
+Treatment x Day 
+```{r}
+n.all <- sample_data(physeq.prev)$Treatment_Day %>% levels()
+for(x in 1:16){
+  for(y in 1:16){
+    if(x < y){  # Ignore useless and redundant files
+      res.test <- generateContrastResults(deseq = finalPhyseq.adds, 
+                                contrast = c("Group", 
+                                             n.all[x],  # num
+                                             n.all[y]), # denom
+                                physeq = physeq.prev,
+                                file = paste("results/diff-abund/Treatment_Day/tables/Diff-Abund_", n.all[x], "-vs-", n.all[y], ".txt", sep="")
+      )
+      plotDESeq2ResFamily(res.test)
+      f <- paste("Diff-Abund_Family_", n.all[x], "-vs-", n.all[y], ".pdf", sep="")
+      ggsave(f, path = "results/diff-abund/Treatment_Day", device = "pdf")
+      plotDESeq2ResGenus(res.test)
+      f <- paste("Diff-Abund_Genus_", n.all[x], "-vs-", n.all[y], ".pdf", sep="")
+      ggsave(f, path = "results/diff-abund/Treatment_Day", device = "pdf")
+      plotDESeq2ResSpecies(res.test)
+      f <- paste("Diff-Abund_Species_", n.all[x], "-vs-", n.all[y], ".pdf", sep="")
+      ggsave(f, path = "results/diff-abund/Treatment_Day", device = "pdf")
+    }
+  }
+}
+```
+
+
+What about differential abundance for Treatment only?
+
+```{r }
+sd <- sample_data(physeq.prev)
+
+sd$Group <- sd$Treatment
+sample_data(physeq.prev) <- sd
+
+design <- model.matrix(~ Group, data = as(sd, "data.frame"))
+
+finalPhyseq.adds = phyloseq_to_deseq2(physeq.prev, ~ Group)
+
+finalPhyseq.adds = DESeq(finalPhyseq.adds,
+                         test="Wald",
+                         fitType="local",
+                         sfType = "poscounts",
+                         quiet = TRUE
+                         )
+```
+
+What are the results names?
+
+```{r}
+resultsNames(finalPhyseq.adds)
+```
+
+Run a loop that will save these tables and images for all the different pairwise contrasts.
+```{r}
+n.all <- sample_data(physeq.prev)$Treatment %>% levels()
+for(x in 1:4){
+  for(y in 1:4){
+    if(x < y){  # Ignore useless and redundant files
+      res.test <- generateContrastResults(deseq = finalPhyseq.adds, 
+                                contrast = c("Group", 
+                                             n.all[x],  # num
+                                             n.all[y]), # denom
+                                physeq = physeq.prev,
+                                file = paste("results/diff-abund/Treatment/tables/Diff-Abund_", n.all[x], "-vs-", n.all[y], ".txt", sep="")
+      )
+      plotDESeq2ResFamily(res.test)
+      f <- paste("Diff-Abund_Family_", n.all[x], "-vs-", n.all[y], ".pdf", sep="")
+      ggsave(f, path = "results/diff-abund/Treatment", device = "pdf")
+      plotDESeq2ResGenus(res.test)
+      f <- paste("Diff-Abund_Genus_", n.all[x], "-vs-", n.all[y], ".pdf", sep="")
+      ggsave(f, path = "results/diff-abund/Treatment", device = "pdf")
+      plotDESeq2ResSpecies(res.test)
+      f <- paste("Diff-Abund_Species_", n.all[x], "-vs-", n.all[y], ".pdf", sep="")
+      ggsave(f, path = "results/diff-abund/Treatment", device = "pdf")
+    }
+  }
+}
+```
+
+What about differential abundance for Day only?
+
+```{r }
+sd <- sample_data(physeq.prev)
+
+sd$Group <- sd$Day
+sample_data(physeq.prev) <- sd
+
+design <- model.matrix(~ Group, data = as(sd, "data.frame"))
+
+finalPhyseq.adds = phyloseq_to_deseq2(physeq.prev, ~ Group)
+
+finalPhyseq.adds = DESeq(finalPhyseq.adds,
+                         test="Wald",
+                         fitType="local",
+                         sfType = "poscounts",
+                         quiet = TRUE
+                         )
+```
+
+What are the results names?
+
+```{r}
+resultsNames(finalPhyseq.adds)
+```
+
+Run a loop that will save these tables and images for all the different pairwise contrasts.
+```{r}
+n.all <- sample_data(physeq.prev)$Day %>% levels()
+for(x in 1:4){
+  for(y in 1:4){
+    if(x < y){  # Ignore useless and redundant files
+      res.test <- generateContrastResults(deseq = finalPhyseq.adds, 
+                                contrast = c("Group", 
+                                             n.all[x],  # num
+                                             n.all[y]), # denom
+                                physeq = physeq.prev,
+                                file = paste("results/diff-abund/Day/tables/Diff-Abund_", n.all[x], "-vs-", n.all[y], ".txt", sep="")
+      )
+      plotDESeq2ResFamily(res.test)
+      f <- paste("Diff-Abund_Family_", n.all[x], "-vs-", n.all[y], ".pdf", sep="")
+      ggsave(f, path = "results/diff-abund/Day", device = "pdf")
+      plotDESeq2ResGenus(res.test)
+      f <- paste("Diff-Abund_Genus_", n.all[x], "-vs-", n.all[y], ".pdf", sep="")
+      ggsave(f, path = "results/diff-abund/Day", device = "pdf")
+      plotDESeq2ResSpecies(res.test)
+      f <- paste("Diff-Abund_Species_", n.all[x], "-vs-", n.all[y], ".pdf", sep="")
+      ggsave(f, path = "results/diff-abund/Day", device = "pdf")
+    }
+  }
+}
+```

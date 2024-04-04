@@ -1,0 +1,10 @@
+# Session
+
+```{r}
+source("~/Desktop/hpcbio-git/hergenrother-16S-mouse-2022Sept/src/common_code.R", local = knitr::knit_global())
+```
+
+```{r }
+sessionInfo()
+```
+

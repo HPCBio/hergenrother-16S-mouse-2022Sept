@@ -1,0 +1,278 @@
+```{r, include=FALSE}
+source("~/Desktop/hpcbio-git/hergenrother-16S-mouse-2022Sept/src/common_code.R", local = knitr::knit_global())
+```
+
+```{r}
+physeq.prev <- readRDS('results/phyloseq.prevfiltered.RDS')
+```
+
+# Beta diversity
+
+Beta diversity tells us how much diversity pairwise samples share with one another. Beta diversity metrics assign a value to that shared diversity. Bray-Curtis is a common non-phylogenetic metric used to compare sample composition based on presence and abundance of ASVs. Weighted Unifrac is a common phylogenetic metric that also compares phylogenetic distance of the shared diversity between two samples. If you have a preferred metric other than these, I can add them in. 
+
+To plot these measurements we have to choose an appropriate ordination method. PCA is NOT recommended for microbial data, since it is not linear, unless it is Hellinger-transformed. PCoA and NMDS are recommended for unconstrained ordination (axes are not constrained by sample metadata), while the former is used in most circumstances. CA is recommended for constrained ordination, however rare data could have an unduly large influence on CA. See [Qian et al., 2020](`https://journals.lww.com/cmj/Fulltext/2020/08050/A_guide_to_human_microbiome_research__study.10.aspx`) for more details. For these reasons, I'll stick with PCoA unless requested otherwise.
+
+## Heatmaps
+Below is an initial beta diversity heatmap based on the prevalence filtered and tip-glommed samples at the Family level (y-axis). This is based on PCoA values (recommended for 16S data) and the Bray-curtis (non-phylogenetic) metric. Data is log2 transformed. Note that this does show all 231 ASVs on the y-axis, which means there is some redundancy in Family taxa on that axis. 
+
+```{r }
+p <- plot_heatmap(physeq.prev,
+                  method = "PCoA",
+                  distance = "bray",
+                  taxa.label = "Family",
+                  sample.label = "Label",
+                  trans = log_trans(2),
+                  title = "PCoA Bray-Curtis Heatmap")
+p
+```
+
+Something different is definitely happening in the Clindamyacin Day 7 & 10 samples, and Amoxicillan Day 7.
+
+Here I have made the same kind of heatmap but with the data glommed at the Family level, so there is no redundancy on the y-axis. However, this does have the downside of grouping all NA taxa into the same group, which is not ideal either, so I've labeled the NA taxa by their Order instead.
+
+```{r}
+#Agglomerate taxa and species level to remove redundancy
+physeq.heat.glom <- tax_glom(physeq.prev, taxrank = "Family", NArm = FALSE)
+
+# Family is not NA
+no.na <- !is.na(tax_table(physeq.heat.glom)[,"Family"])
+
+#Family level in beneficial has a couple NAs that need to be renamed to Family
+tax_table(physeq.heat.glom)[!no.na][,"Family"] = paste("[Order]", 
+                                                      tax_table(physeq.heat.glom)[!no.na][,"Order"])
+```
+
+```{r }
+p <- plot_heatmap(physeq.heat.glom,
+                  method = "PCoA",
+                  distance = "bray",
+                  taxa.label = "Family",
+                  sample.label = "Label",
+                  trans = log_trans(2),
+                  title = "PCoA Bray-Curtis Heatmap - Glommed at Family Level")
+p
+```
+
+
+## PCoA plots
+
+Transform data to relative proportions (no prior added).  We have the option to change this later.
+
+```{r }
+#All samples
+physeq.prop <- transform_sample_counts(physeq.prev, function(x) x/sum(x) )
+sample_data(physeq.prop)$SampleSums <- sample_sums(physeq.prev)
+```
+
+<!-- ## CLR normalization, McMurdie -->
+
+<!-- Transform data using CLR (from McMurdie (Meth Mol Bio 2018) supplemental package).   -->
+
+```{r }
+# # copy instance and replace raw counts with CLR-normalized counts
+# physeq.clr <- phyloseq_CLR(physeq.prev)
+# # otu_table(physeq.clr) <- otu_table(as(x, "matrix"), taxa_are_rows = FALSE)
+# physeq.clr
+# 
+# mucosa.clr <- phyloseq_CLR(mucosa.prev)
+# digesta.clr <- phyloseq_CLR(digesta.prev)
+```
+
+<!-- ## CLR normalization, mixOmics -->
+
+<!-- CLR from `mixOmics`. -->
+
+```{r }
+# # get counts
+# tmp <- as(otu_table(mucosa.prev),"matrix")
+# 
+# tmp <- tmp
+# 
+# # transpose if needed
+# if(!taxa_are_rows(mucosa.prev)) { tmp <- t(tmp)}
+# 
+# x <- logratio.transfo(tmp, logratio = 'CLR', offset = 1)
+# 
+# # copy instance and replace raw counts with CLR-normalized counts
+# mucosa.clr2 <- mucosa.prev
+# otu_table(mucosa.clr2) <- otu_table(as(x, "matrix"), taxa_are_rows = TRUE)
+# mucosa.clr2
+```
+
+Set the active normalization type (proportion for now)
+
+```{r}
+physeq.active <- physeq.prop
+```
+
+### Bray Curtis metric
+
+```{r }
+set.seed(1234)
+
+finalPhyseq.ord <- ordinate(physeq.active, "PCoA", "bray")
+p1 = plot_ordination(physeq.active,
+                     finalPhyseq.ord,
+                     type="samples",
+                     color="Treatment",
+                     shape = "Day",
+                     title="Samples") + geom_point(size = 2.5)
+p1 + ggtitle("PCoA, Bray Curtis distance")
+#ggplotly(p1 + ggtitle("PCoA, Bray Curtis distance"))
+#+  scale_fill_viridis_d()
+```
+
+Again splitting by some of those Amoxicillin and Clindamycin samples on day 7 and 10. Lolamycin and Vehicle tend to plot closely together so they do seem to share more diversity.
+
+PCoA w/o Day 3
+
+```{r }
+physeq.test <- subset_samples(physeq.active, sample_data(physeq.active)$Day != "31")
+
+set.seed(1234)
+
+finalPhyseq.ord <- ordinate(physeq.test, "PCoA", "bray")
+p1 = plot_ordination(physeq.test,
+                     finalPhyseq.ord,
+                     type="samples",
+                     color="Treatment",
+                     shape = "Day",
+                     title="Samples") + geom_point(size = 2.5)
+p1 + ggtitle("PCoA, Bray Curtis distance")
+#ggplotly(p1 + ggtitle("PCoA, Bray Curtis distance"))
+#+  scale_fill_viridis_d()
+```
+
+Check to see if number of sequences per sample (input) affects diversity
+
+```{r }
+p1 <- plot_ordination(physeq.active,
+                     finalPhyseq.ord,
+                     type="samples",
+                     color="input",
+                     label="Label",
+                     title="Samples") + geom_point(size = 2.5) +
+  ggtitle("PCoA, Bray Curtis distance") 
+ggplotly(p1)
+```
+
+Nothing odd related to number of input sequences.
+
+### Weighted UniFrac metric
+
+Let's look at Weighted UniFrac
+
+```{r}
+finalPhyseq.ord <- ordinate(physeq.active, "PCoA", "wunifrac")
+p1 = plot_ordination(physeq.active,
+                     finalPhyseq.ord,
+                     type="samples",
+                     color="Treatment",
+                     shape = "Day",
+                     label = "Label",
+                     title="Samples") + geom_point(size = 2.5)
+#p1 + scale_color_brewer(palette="Spectral")
+ggplotly(p1)
+```
+
+## PERMANOVA
+
+Let's try PERMANOVA on this using the implementation in `vegan` (`adonis2`). This is the most popular and powerful test  recommended for microbial studies. P-value indicates whether the diversity between different communities is statistically significant. R^2 indicates how much of the total variance can be explained by grouping factor.
+
+Results below are for the Bray-Curtis metric, but I found the results to be the same for Weighted Unifrac. I can report those specific results as well if needed.
+
+```{r }
+finalPhyseq.meta <- as(sample_data(physeq.active), "data.frame")
+finalPhyseq.prop.dist.bc <- phyloseq::distance(physeq.active, method = "bray")
+```
+
+Treatment:
+```{r}
+set.seed(12345)
+adonis2(finalPhyseq.prop.dist.bc ~ Treatment,
+       data = finalPhyseq.meta)
+```
+
+
+Day:
+```{r}
+set.seed(12345)
+adonis2(finalPhyseq.prop.dist.bc ~ Day,
+       data = finalPhyseq.meta)
+```
+
+
+Day x Treatment:
+```{r}
+set.seed(12345)
+adonis2(finalPhyseq.prop.dist.bc ~ Treatment_Day,
+       data = finalPhyseq.meta)
+```
+
+Treatment, Day, and the interaction of Treatment*Day are all very significant, and combined explain ~70% of the variance. However, as it turns out the data are heteroscedastic (see below), which may invalidate these results. See test below.
+
+
+Test for differences between group dispersion. Ideally, these tests won't be significant.
+
+Treatment
+```{r}
+beta <- betadisper(finalPhyseq.prop.dist.bc, finalPhyseq.meta$Treatment)
+permutest(beta)
+```
+Day
+```{r}
+beta <- betadisper(finalPhyseq.prop.dist.bc, finalPhyseq.meta$Day)
+permutest(beta)
+```
+
+```{r}
+plot(beta, main = "beta dispersion estimates between days")
+```
+You can see that days 7 and 10 have wide variation, which could create a heteroscedasticity problem for this test.
+
+Treatment x Day
+```{r}
+beta <- betadisper(finalPhyseq.prop.dist.bc, finalPhyseq.meta$Treatment_Day)
+permutest(beta)
+```
+
+These are all significant, which means the data are heteroscedastic with Treatment X Day being closest to not being heterscedastic (i.e. highest p value). PERMANOVA tests are sensitive to unbalanced/heterscedastic data (though it is the most robust of all the possible tests) which can bring to question the validity of these results. On the positive side, the significance is very strong and the heatmap suggests that this is a real biological effect. This is also not uncommon in time-series data sets where there are drastic changes over time. However there is one more thing to consider...
+
+### Confounding variable
+
+Out of curiosity I also tested the forward and reverse Pacbio primers (the indices used for multiplexing) for significance and found that the reverse primers indices used for multiplexing were very significant, which is unusual. Based on the metadata, it looks like the reverse primers are confounded with the treatments. There are 3 primers per antibiotic. This means that they are not evenly spread out across treatments. It's not likely that these have affected your project results, but we can't completely rule it out either.
+
+Reverse_Primer test:
+
+```{r}
+set.seed(12345)
+adonis2(finalPhyseq.prop.dist.bc ~ Reverse_Primer,
+       data = finalPhyseq.meta)
+```
+
+Treatment x Day X Reverse Primer
+```{r}
+set.seed(12345)
+adonis2(finalPhyseq.prop.dist.bc ~ Trt_Day_RevP,
+       data = finalPhyseq.meta)
+```
+Treatment x Day x Reverse Primer is very significant, however, the R2 values is only a couple of percentage points higher than the Treatment x Day tests, which means that Reverse_Primer isn't affecting much, if anything.
+
+
+Reverse Primer tests for heteroscedasticity
+
+Reverse_Primer:
+```{r}
+beta <- betadisper(finalPhyseq.prop.dist.bc, finalPhyseq.meta$Reverse_Primer)
+permutest(beta)
+```
+
+Reverse Primer is not heteroscedastic
+
+Treat_Day_RevP:
+```{r}
+beta <- betadisper(finalPhyseq.prop.dist.bc, finalPhyseq.meta$Trt_Day_RevP)
+permutest(beta)
+```
+
+Treatment x Day x RevP is NOT heteroscedastic, but it's close.

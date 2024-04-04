@@ -1,0 +1,165 @@
+```{r, include=FALSE}
+# at some point this should be moved into bookdown
+source("~/Desktop/hpcbio-git/hergenrother-16S-mouse-2022Sept/src/common_code.R", local = knitr::knit_global())
+```
+
+```{r}
+physeq.filtered <- readRDS('results/physeq.filtered.RDS')
+```
+
+# Alpha diversity
+
+Check alpha diversity stats.  Note we haven't performed any additional filtering or agglomeration at this stage; this is largely due to recommendations to prevent loss of rare ASVs or singletons in the data, which can dramatically affect alpha diversity measures.  Specifically (from the `plot_richness` function used here):
+
+> You must use untrimmed, non-normalized count data for meaningful results, as many of these estimates are highly dependent on the number of singletons. You can always trim the data later on if needed, just not before using this function.
+
+## Overall
+
+We'll calculate some initial alpha diversity metrics. Alpha diversity assigns a value to the amount of diversity within an individual sample. Depending on the chosen metric, this can be based on presence, abundance, and/or phylogenetic distance of ASVs.
+
+```{r}
+# all six measures: Observed, Chao1, ACE, Shannon, Simpson, Inv. Simpson, Fisher
+erDF <- estimate_richness(physeq.filtered, 
+                          measures = c('Observed', 'Chao1', 'ACE', 'Shannon', 'Simpson', 'InvSimpson'))
+
+# add Faith's PD, this is a simple wrapper to format everything correctly
+pd <- estimate_pd(physeq.filtered)
+
+# we don't need SR, it's the same as observed
+erDF$PD <- pd$PD
+
+measures <- colnames(erDF)
+```
+
+We'll check the overall measures for alpha diversity across different groups.  The descriptions below are largely from the [QIIME2 forum](https://forum.qiime2.org/t/alpha-and-beta-diversity-explanations-and-commands/2282) with some additional notes.
+
+* **Observed** - Number of features (ASVs in this case).  From the `phyloseq` package, function `estimate_richness`. 
+* **Chao1** - Estimates number of rare taxa missed from undersampling, with an associated confidence interval. Compare to observed taxa, the difference will be those expected to be missing. From the `phyloseq` package, function `estimate_richness`. 
+* **ACE** - Abundance-based Coverage Estimator. Estimates species richness using a correction factor.  From the `phyloseq` package, function `estimate_richness`. 
+* **Shannon** - Calculates richness and diversity using a natural logarithm, accounts for both abundance and evenness of the taxa present. From the `vegan` package, function `diversity`. 
+* **Simpson** - Measures the relative abundance of the different species making up the sample richness.  From the `vegan` package, function `diversity`. 
+* **Inverse Simpson** - Measures the relative abundance of the different species making up the sample richness.  From the `vegan` package, function `diversity`. 
+* **Fisher** - Relationship between the number of species and the abundance of each species.  From the `vegan` package, function `diversity`. 
+* **Faith's PD** - Sum of the total phylogenetic branch length for one or multiple samples.  From the `picante` package, function `pd`. 
+
+
+
+Look at significance of metrics across Day/time (compared to mean). 
+
+```{r}
+p <- plot_richness_estimates(physeq = physeq.filtered, 
+                             erDF = erDF,
+                             "Day", 
+                             color = "Treatment", 
+                             title="Alpha diversity of Day compared to mean")
+
+p + geom_boxplot(aes(x=Day,
+                     y=value,
+                     color=NULL), alpha=0.1) +
+  stat_compare_means(label = "p.signif",
+                    # ref.group = "0",
+                     hide.ns = TRUE,
+                     method = "wilcox.test") +
+  ylab("Diversity value") + 
+  #scale_x_discrete(labels=labels) + 
+  theme(legend.position = "none")
+
+ggsave("alphaDiv-allMetrics-byDay.pdf", path = "./results/final-plots", device = "pdf", width = 10, height = 7.5, units = "in")
+```
+
+Based on alpha rarefaction and alpha diversity analysis there does appear to be a difference with Day and the significance is strong across all metrics.
+
+Look at significance of metrics across Treatment (compared to the mean). Will need to compare to Vehicle at some point as well (see note below).
+
+```{r}
+p <- plot_richness_estimates(physeq = physeq.filtered, 
+                             erDF = erDF,
+                             "Treatment", 
+                             color = "Day", 
+                             title="Alpha diversity of Treatment compared to mean")
+
+p + geom_boxplot(aes(x=Treatment,
+                     y=value,
+                     color=NULL), alpha=0.1) +
+  stat_compare_means(label = "p.signif", 
+                    # ref.group = "Vehicle",
+                     hide.ns = TRUE,
+                     method = "wilcox.test") +
+  ylab("Diversity value") + 
+  #scale_x_discrete(labels=labels) + 
+  theme(legend.position = "none")
+
+ggsave("alphaDiv-allMetrics-byTreatment.pdf", path = "./results/final-plots", device = "pdf", width = 10, height = 7.5, units = "in")
+```
+
+There also appears to be significant differences for Treatment (especially Clindamycin) but not quite as strong. 
+
+NOTE: I need to also compare this to the vehicle, but the code was giving me an error. I tried re-installing rlang, but this did not help. I may need to try this on a different version of R.
+
+## Shannon alpha diversity only
+
+By Day (reference set to Vehicle Day 0). Keep only Day 0 & 7.
+
+```{r}
+physeq.test <- subset_samples(physeq.filtered, sample_data(physeq.filtered)$Day %in% c("0","7") )
+
+
+p <- plot_richness(physeq = physeq.test, 
+                             measures = "Shannon",
+                             "Treatment_Day", 
+                             color = "Treatment", 
+                             title="Alpha diversity of Treatment & Day compared to Vehicle Day 0")
+
+p + geom_boxplot(aes(x=Treatment_Day,
+                     y=value,
+                     color=NULL), alpha=0.1) +
+  stat_compare_means(label = "p.signif", 
+                     ref.group = "Vehicle_0",
+                     hide.ns = TRUE,
+                     method = "wilcox.test") +
+  ylab("Diversity value") + 
+  theme(legend.position = "none")
+
+ggsave("alpha-shannon-byTreatment-and-Day_0and7.pdf", path = "./results/final-plots", device = "pdf", width = 10, height = 7.5, units = "in")
+```
+
+<!-- By Treatment (reference set to "Vehicle") -->
+
+<!-- ```{r} -->
+<!-- p <- plot_richness(physeq = physeq.filtered,  -->
+<!--                              measures = "Shannon", -->
+<!--                              "Treatment",  -->
+<!--                              color = "Day",  -->
+<!--                              title="Alpha diversity of Treatment compared to Vehicle") -->
+
+<!-- p + geom_boxplot(aes(x=Treatment, -->
+<!--                      y=value, -->
+<!--                      color=NULL), alpha=0.1) + -->
+<!--   stat_compare_means(label = "p.signif",  -->
+<!--                      ref.group = "Vehicle", -->
+<!--                      hide.ns = TRUE, -->
+<!--                      method = "wilcox.test") + -->
+<!--   ylab("Diversity value") +  -->
+<!--   #scale_x_discrete(labels=labels) +  -->
+<!--   theme(legend.position = "none") -->
+
+<!-- #ggsave("alpha-faithpd-mucosa-byTreatment.pdf", path = "./results/final-plots", device = pdf, width = 6, height = 5.5, units = "in") -->
+<!-- ``` -->
+
+## Check for normal distribution 
+
+### Plot to check normality
+
+Do these look like a normal distribution? If p is less than 0.05, then it is not normally distributed and non-parametric tests should be used instead (such as the Wilcoxen-rank sum test).
+
+```{r }
+par(mfrow = c(2, 3))
+
+plots <- lapply(c('Chao1', 'Shannon', 'Simpson', 'InvSimpson', 'Observed', 'PD'), 
+       function(x) {
+         shap <- shapiro.test(erDF[,x])
+         hist(erDF[,x], xlab = "Measure", main=paste0(x, "\nShapiro pvalue=", label_number(accuracy = 0.0001)(shap$p.value)), breaks=15)
+         })
+```
+
+Only the InvSimpson metric passes the normality test, so we should use the Wilcoxen rank sum test above.

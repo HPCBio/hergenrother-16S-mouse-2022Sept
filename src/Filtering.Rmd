@@ -1,0 +1,324 @@
+# Initial filtering
+
+```{r, include=FALSE}
+# at some point this should be moved into bookdown
+source("~/Desktop/hpcbio-git/hergenrother-16S-mouse-2022Sept/src/common_code.R", local = knitr::knit_global())
+```
+
+```{r}
+# Load in data
+physeq <- readRDS('results/physeq.raw.RDS')
+physeq.filtered <- physeq
+```
+
+These steps remove or subset the original data by:
+
+1. Selecting samples from the original to focus on
+2. Remove any possible bad/uninformative samples (with justification)
+3. Remove any taxa not found in the remaining samples after removing the above
+4. Remove artifacts
+5. Remove contaminants from cross-contamination (requires controls) 
+6. Prune out low-count taxa
+
+We save this file for alpha rarefaction, alpha diversity, and prevalence filtering/agglomeration
+
+## Subset of data
+
+Are we focusing on one particular subset of samples?  
+
+Not at the moment, so will skip the following step.
+
+<!-- ### Subset samples -->
+
+<!-- ```{r} -->
+<!-- physeq.filtered <- subset_samples(physeq, Sex == "M") -->
+<!-- physeq.filtered -->
+<!-- ``` -->
+
+## Prune out any other samples?
+
+Can filter out outliers if needed, but for now I will not.
+
+<!--  ```{r } -->
+<!--   physeq.filtered <- prune_samples(!(sample_names(physeq.filtered) %in% c("MB4", "MB5")), physeq.filtered) -->
+<!--   physeq.filtered -->
+<!--  ``` -->
+
+## Zero-count taxa
+
+If we remove samples, there may be some taxa that are no longer present in the subset we have.  Any taxa present that are 0 count?
+
+```{r}
+table(taxa_sums(physeq.filtered) == 0)
+```
+
+There are none.
+
+<!-- ```{r} -->
+<!-- physeq.filtered <- subset_taxa(physeq.filtered, taxa_sums(physeq.filtered) > 0) -->
+<!-- physeq.filtered -->
+<!-- ``` -->
+
+<!-- If needed, save these as a separate input for the next steps. -->
+
+<!-- ```{r} -->
+<!-- saveRDS(physeq.filtered, 'results/physeq.raw.males.RDS') -->
+<!-- ``` -->
+
+## Removing artifacts
+
+We need to remove ASVs that are likely artifacts, for example from host or from other sources.  We should get rid of:
+
+* Unranked/unassigned
+* Eukarya (kingdom)
+* Mitochondria
+* Chloroplast
+
+The RDP classifier and other classifiers will sometimes mis-classify sequences that have very little sequence similarity to 16S based on the way it works; these tend to classify poorly by rank (NA or 'Unclassified' up to and sometimes including Domain/Kingdom).  
+
+What proportion of the ASVs are unassigned at each rank? Note that it is common to have low levels of species assignment due to DADA2's strictness.
+
+```{r}
+taxtab <- tax_table(physeq.filtered)
+
+# note this test checks if the rank is NA; if the rank is assigned 'Unclassified' modify the term here
+ranks <- data.frame(apply(taxtab, 2, 
+                          function(x) label_percent(accuracy = 0.01) (sum( is.na(x) )/length(x) ) ))
+colnames(ranks) <- c("Perc.Unclassified")
+ranks %>% kable
+```
+
+How many Domain/Kingdom levels are there?
+
+```{r }
+table(tax_table(physeq.filtered)[,'Domain']) %>% kable
+```
+
+There are not any non-microbial hits, so no need to remove sequences mis-classified as eukaryotic
+
+There are a few that are unclassified across almost all ranks; anything not classified at least to a phylum level are uninformative.  We should go ahead and remove these. 
+
+How many Phylum are unassigned?  (TRUE means these are unassigned)
+
+```{r }
+table(is.na(tax_table(physeq.filtered)[,'Phylum'])) %>% kable
+```
+
+Only 1 is not assigned at the phylum rank.  Export the unassigned sequences to a file.
+
+```{r}
+unasn <- subset_taxa(physeq.filtered, is.na(Phylum))
+unasn
+```
+
+```{r}
+library(Biostrings)
+dir.create(file.path('..', 'results', 'unasn-sequences'), showWarnings = FALSE, recursive = TRUE)
+writeXStringSet(refseq(unasn), 
+                filepath = '../results/unasn-sequences/unassigned-phylum-level.fna', 
+                format = 'fasta')
+```
+
+Subset those sequences that have assignments at least at the Phylum level.
+
+```{r }
+physeq.filtered <- subset_taxa(physeq.filtered, !(is.na(Phylum)))
+physeq.filtered
+```
+
+### Eukaryotic sequences
+
+None were found that were explicitly classified as eukarya, so skipping this step.
+
+<!-- ```{r } -->
+<!-- # extract eukaryotic sequences if found -->
+<!-- euks <- subset_taxa(physeq.pacbio, Domain == "Eukaryota") -->
+<!-- tax_table(euks) %>% as.data.frame %>% knitr::kable() -->
+<!-- ``` -->
+
+<!-- ```{r } -->
+<!-- tmp <- sample_sums(euks) -->
+<!-- tmp[ tmp > 0 ] -->
+<!-- ``` -->
+
+<!-- ```{r } -->
+<!-- physeq.pacbio <- subset_taxa(physeq.pacbio, !(Domain == 'Eukaryota')) -->
+<!-- ``` -->
+
+### Organelle 16S (mitochondria, chloroplast)
+
+Next we check for organelle 16S sequences.  These could arise from chloroplast or mitochondria.  They are classified under different rank criteria in Silva, so we need to check for them separately. 
+
+Any hits for chloroplast? These are found under the `Order` rank.
+
+```{r }
+table(tax_table(physeq.filtered)[,'Order'])['Chloroplast']
+```
+
+3 chloroplast sequences.  Let's grab these and export to look into further; these are the samples that have chloroplast sequences. 
+
+```{r}
+chloros <- subset_taxa(physeq.filtered, Order == 'Chloroplast')
+sample_sums(chloros) %>% magrittr::extract(. > 0)
+```
+
+Only in 10 samples and in low amounts.
+
+
+Any mitochondrial sequences in the `Family` rank?  
+
+```{r }
+table(tax_table(physeq.filtered)[,'Family'])['Mitochondria']
+```
+
+There are a couple.
+
+```{r }
+#mitos <- subset_taxa(physeq.filtered, Family == 'Mitochondria')
+#sample_sums(mitos) %>% magrittr::extract(. > 0)
+```
+
+For the final filtered data, we will remove the chloroplasts and the mitochondrial taxa.
+
+```{r }
+#Note that we have to be a bit careful w/ this code, as this can inadvertently remove unassigned ranks (those with NA).
+
+# remove negative control samples that aren't part of the analysis (water, Zymo)
+#physeq.filtered <- subset_samples(physeq, Treatment != 'Control')
+
+# remove mitochondria
+physeq.filtered <- subset_taxa(physeq.filtered, is.na(Family) | Family != 'Mitochondria')
+
+# remove chloroplast
+physeq.filtered <- subset_taxa(physeq.filtered, is.na(Order) | Order != 'Chloroplast')
+
+physeq.filtered
+```
+
+
+## Remove taxa with 0 counts
+
+Do we need to filter out any taxa with 0 counts?  Let's check how many have taxonomic sums equal to 0
+
+```{r }
+table(taxa_sums(physeq.filtered) == 0)
+```
+
+None!  
+
+<!-- Removing these below. -->
+
+<!-- ```{r } -->
+<!-- physeq.filtered <- prune_taxa(taxa_sums(physeq.filtered) > 0, physeq.filtered) -->
+<!-- physeq.filtered -->
+<!-- ``` -->
+
+How about the number of samples who have 0 counts?
+
+```{r }
+table(sample_sums(physeq.filtered) == 0)
+```
+
+No samples with zero counts after filtering in the above steps.
+
+```{r }
+# sample_data(physeq)[sample_sums(physeq.filtered) == 0]
+```
+
+```{r }
+# physeq.filtered <- prune_samples(sample_sums(physeq.filtered) > 0, physeq)
+# physeq.filtered
+```
+
+## Contaminant removal from control samples
+
+We do not have background/negative controls in this experiment therefore can't do this step.  
+
+```{r }
+# These steps use the decontam library
+
+# df.contam <- as.data.frame(sample_data(physeq.filtered))
+# df.contam$LibrarySize <- sample_sums(physeq.filtered)
+
+# sample_data(physeq.filtered)$is.neg <- sample_data(physeq.filtered)$Control == "Negative"
+# contamdf.prev <- isContaminant(physeq.filtered, 
+#                                method = "prevalence", 
+#                                neg = "is.neg", 
+#                                threshold = 0.1)
+# 
+# table(contamdf.prev$contaminant)
+```
+
+<!-- Which ones are contaminants? -->
+
+```{r }
+# which(contamdf.prev$contaminant)
+```
+
+<!-- Based on the threshold we are seeing some contaminants showing up; how prevalent are they in the overall samples? -->
+
+```{r }
+# ps.neg <- prune_samples(
+#   sample_data(physeq.filtered)$Control == "Negative", physeq.filtered)
+# ps.neg.presence <- transform_sample_counts(ps.neg, function(abund) 1*(abund > 0))
+# 
+# ps.pos <- prune_samples(
+#   sample_data(physeq.filtered)$Control == "Sample", physeq.filtered)
+# ps.pos.presence <- transform_sample_counts(ps.pos, function(abund) 1*(abund > 0))
+# 
+# df.pres <- data.frame(
+#   prevalence.pos = taxa_sums(ps.pos.presence), 
+#   prevalence.neg = taxa_sums(ps.neg.presence),
+#   contam.prev = contamdf.prev$contaminant)
+# 
+# ggplot(data = df.pres, aes(x=prevalence.neg, y=prevalence.pos, color=contam.prev)) + 
+#   geom_point()
+```
+
+```{r }
+# physeq.filtered <- prune_taxa(!contamdf.prev$contaminant, physeq.filtered)
+# physeq.filtered
+```
+
+## Prune low count samples
+
+We skip this in favor of precedence filtering, but will plot a histogram of sample counts to show the overall distribution.
+
+```{r}
+hist(sample_sums(physeq.filtered), breaks = 50)
+```
+
+Pretty reasonable spread. No samples are below our standard 10k count limit.
+
+
+## Basic overview
+
+Let's look at the data.  We have `r ntaxa(physeq)` taxa and `r nsamples(physeq)` samples.
+
+Here are the sample variables for analysis:
+
+```{r }
+sample_variables(physeq.filtered)
+```
+
+Note these include data from read tracking.  Here is a simple summary of the phylogenetic tree (this is midpoint-rooted in the workflow) with the top 50 most abundant ASVs.
+
+```{r }
+# get the top 50 taxa based on overall taxa sums
+myTaxa1 <- names(sort(taxa_sums(physeq.filtered), decreasing = TRUE))[1:50]
+
+# generate a tmp instance with only those taxa
+ex0 = prune_taxa(myTaxa1, physeq.filtered)
+
+# plot with only those, labeling as needed
+p <-plot_tree(ex0, label.tips = 'Family',
+          ladderize = "left",
+          justify = "left",
+          color = 'Treatment'
+          )
+p
+```
+
+```{r}
+saveRDS(physeq.filtered, 'results/physeq.filtered.RDS')
+```
