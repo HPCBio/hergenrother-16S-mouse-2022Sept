@@ -21,15 +21,12 @@ library(vegan)
 library(ggpubr)
 library(gginnards)
 
-# normalization (CLR)
-library(mixOmics)
-
 # to get labels2color
 library(WGCNA)
 
 # visualization
 library(ranacapa)
-
+library(microViz)
 
 
 ## FUNCTIONS

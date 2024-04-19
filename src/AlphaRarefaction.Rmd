@@ -13,13 +13,26 @@ Let's check whether we're adequately capturing diversity.  This is a simple alph
 
 ```{r, include=FALSE}
 p <- suppressMessages(ranacapa::ggrare(physeq.filtered, step = 1000,
-            color = "Treatment",
+           # color = "Treatment",
            # label = "Label",
             se = FALSE,
             plot = FALSE,
-            )) + ggtitle("Alpha Rarefaction")
+            )) + ggtitle("Alpha Rarefaction") +
+  scale_color_manual(values = dittoSeq::dittoColors()) +
+  scale_linetype_manual(values = c( "dashed", "dotted","twodash", "solid")) +
+  geom_line(aes(linetype = Treatment, color = Treatment)) +
+  theme(axis.line = element_line(color='black'),
+    plot.background = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank()) +
+ # guides(fill=guide_legend(override.aes=list(color=dittoSeq::dittoColors(), linetype = c( "dashed", "dotted","twodash", "solid"))))
+#guides(colour = guide_legend(override.aes = list(color=dittoSeq::dittoColors(), linetype = c( "dashed", "dotted","twodash", "solid"))))
+  labs(color  = "Key", linetype = "Key")
 
-ggsave("alpha-rarefaction-colorByTreatment.pdf", path = "./results/final-plots", width = 8, height = 5, device = "pdf")
+# Remove first line layer (made by ggrare)
+p <- delete_layers(p, idx = 1L)
+
+ggsave("alpha-rarefaction-colorByTreatment_CBF.pdf", path = "./results/final-plots", width = 8, height = 5, device = "pdf")
 ```
 
 
@@ -35,11 +48,20 @@ ggsave("alpha-rarefaction-splitByTreatment.pdf", path = "./results/final-plots",
 Rarefaction looks pretty decent. There may be a few samples that didn't plateau (not all diversity seems to have been captured)
 
 
-And also by Day:
+And also by Day (w/ legend):
 
 ```{r}
 p <- p + facet_wrap(~Day) + ggtitle("Alpha Rarefaction by Day") 
 
 ggplotly(p)
-ggsave("alpha-rarefaction-splitByDay.pdf", path = "./results/final-plots", device = "pdf")
+ggsave("alpha-rarefaction-splitByDay_CBF.pdf", path = "./results/final-plots", device = "pdf", width = 6, height = 4)
+```
+And also by Day (w/o legend):
+
+```{r}
+p <- p + facet_wrap(~Day) + ggtitle("Alpha Rarefaction by Day") +
+  theme(legend.position="none")
+
+ggplotly(p)
+ggsave("alpha-rarefaction-splitByDay_CBF_nolegend.pdf", path = "./results/final-plots", device = "pdf", width = 5, height = 4)
 ```
